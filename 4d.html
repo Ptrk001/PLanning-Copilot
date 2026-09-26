@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cadence 4D — démo planning 4D</title>
+<link rel="icon" href="data:,">
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:#eef1f6;color:#1e1b2e;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+header.top{background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;padding:10px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+header.top h1{margin:0;font-size:18px;flex:1;min-width:180px}
+header.top h1 span{font-size:12px;font-weight:400;opacity:.85;display:block}
+.btn{border:0;border-radius:10px;padding:9px 12px;font-size:13px;font-weight:600;cursor:pointer;background:rgba(255,255,255,.18);color:#fff}
+.btn:hover{background:rgba(255,255,255,.3)}
+.btn.pri{background:#f59e0b;color:#3a2a00}
+.btn.on{background:#f59e0b;color:#3a2a00}
+main{flex:1;display:flex;min-height:0}
+aside#panel{width:330px;flex:none;background:#fff;border-right:1px solid #e2e7ef;overflow-y:auto;padding:12px}
+body.hidepanel aside#panel{display:none}
+section#stage{flex:1;display:flex;flex-direction:column;min-width:0}
+#view3d{flex:1;min-height:0;position:relative}
+#view3d canvas{display:block}
+#timeline{background:#fff;border-top:1px solid #e2e7ef;padding:10px 14px}
+#timeline .row{display:flex;align-items:center;gap:10px}
+#tl{flex:1;accent-color:#7c3aed}
+#tldate{font-weight:700;font-size:15px;white-space:nowrap}
+#tllabels{display:flex;justify-content:space-between;font-size:11px;color:#6b6580;margin-top:2px}
+.pbar{height:8px;background:#eee7fd;border-radius:6px;overflow:hidden;margin-top:8px}
+.pbar i{display:block;height:100%;background:linear-gradient(90deg,#f59e0b,#7c3aed)}
+.task{border:1px solid #e9e2f7;border-radius:12px;padding:8px;margin-bottom:8px;cursor:pointer}
+.task.sel{border-color:#7c3aed;box-shadow:0 0 0 2px #ede9fe}
+.thead{display:flex;align-items:center;gap:8px;font-size:14px}
+.thead b{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dot{width:12px;height:12px;border-radius:50%;flex:none}
+.cnt{font-size:11px;color:#6b6580;background:#f1f0f7;border-radius:10px;padding:2px 8px;white-space:nowrap}
+.st{font-size:11px;color:#6b6580;white-space:nowrap}
+.tprog{height:6px;background:#f1f0f7;border-radius:4px;overflow:hidden;margin:6px 0}
+.tprog i{display:block;height:100%}
+.tedit{display:flex;gap:4px}
+.tedit input[type=text]{flex:2;min-width:0}
+.tedit input{flex:1;min-width:0;padding:6px;border:1.5px solid #e9e2f7;border-radius:8px;font-size:12px;font-family:inherit}
+.mini{border:1px solid #e9e2f7;background:#fff;border-radius:8px;padding:6px 8px;cursor:pointer;font-size:13px}
+.mini.danger{border-color:#fecaca}
+h2{font-size:16px;margin:14px 0 8px}h2:first-child{margin-top:0}
+.mut{color:#6b6580;font-size:13px}
+.tag{display:inline-block;background:#f1f0f7;border-radius:8px;padding:3px 8px;font-size:11px;margin:2px}
+.legend{font-size:12px;color:#6b6580;line-height:1.9}
+.sw{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+#status{font-size:12px;color:#6b6580;background:#f5f2ff;border-radius:10px;padding:8px;margin-top:10px;word-break:break-word}
+.bigbtn{width:100%;border:0;border-radius:12px;padding:12px;font-size:14px;font-weight:700;cursor:pointer;background:#7c3aed;color:#fff;margin:4px 0}
+.bigbtn.sec{background:#ede9fe;color:#6d28d9}
+#paneltoggle{display:none}
+@media(max-width:760px){
+  aside#panel{position:absolute;z-index:5;height:calc(100% - 52px);box-shadow:2px 0 12px rgba(0,0,0,.15)}
+  body.hidepanel aside#panel{display:none}
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <button class="btn" onclick="togglePanel()" title="Panneau">☰</button>
+  <h1>🏗️ Cadence 4D<span>planning 4D — démo : maquette IFC + planning + curseur de temps</span></h1>
+  <button class="btn" id="sample">🏠 Exemple</button>
+  <label class="btn pri" style="cursor:pointer">📁 Charger un IFC<input type="file" id="file" accept=".ifc,.ifczip" style="display:none"></label>
+  <button class="btn" onclick="resetView()">🎯 Recentrer</button>
+</header>
+<main>
+  <aside id="panel">
+    <h2>📋 Tâches du planning</h2>
+    <div id="tasks"></div>
+    <button class="bigbtn" id="addtask">＋ Ajouter une tâche</button>
+    <button class="bigbtn sec" id="assignbtn" onclick="toggleAssign()">👆 Clic : assigner un élément</button>
+    <div class="mut" id="mapstat" style="margin:6px 0"></div>
+    <h2>🧱 Types IFC dans la maquette</h2>
+    <div id="types"></div>
+    <h2>🎨 Légende 4D</h2>
+    <div class="legend">
+      <div><span class="sw" style="background:#d7dde5"></span>Gris = sans tâche (toujours visible)</div>
+      <div><span class="sw" style="background:#fff;border:1px solid #999"></span>Invisible = pas encore commencé</div>
+      <div><span class="sw" style="background:#f59e0b;opacity:.6"></span>Orange transparent = en cours</div>
+      <div><span class="sw" style="background:#d9c39a"></span>Couleur pleine = terminé</div>
+    </div>
+    <h2>ℹ️ Mode d'emploi</h2>
+    <div class="mut">1. Bouge le curseur de temps ou lance la lecture.<br>2. Clique une tâche pour la sélectionner.<br>3. Active « 👆 assigner » puis clique des éléments en 3D pour les rattacher à la tâche.<br>4. Le bouton 🧱⇥ assigne tout un type IFC d'un coup.</div>
+    <div id="status">Initialisation…</div>
+  </aside>
+  <section id="stage">
+    <div id="view3d"></div>
+    <div id="timeline">
+      <div class="row">
+        <button class="mini" id="playbtn" style="font-size:15px">▶ Lecture</button>
+        <select id="speed" class="mini"><option value="1">1 j / 0,6 s</option><option value="3">3 j / 0,6 s</option><option value="7">7 j / 0,6 s</option></select>
+        <input type="range" id="tl" min="0" max="30" value="0">
+        <span id="tldate">📅 —</span>
+      </div>
+      <div id="tllabels"></div>
+      <div class="row" style="margin-top:6px"><span class="mut">Avancement global :</span>
+        <div class="pbar" style="flex:1"><i id="prog" style="width:0%"></i></div><b id="progtxt">0 %</b>
+      </div>
+    </div>
+  </section>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/web-ifc@0.0.74/web-ifc-api-iife.js"></script>
+<script type="importmap">
+{"imports":{
+  "three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+}}
+</script>
+<script>
+/* ---- Maquette d'exemple : générée à la volée (vrai format IFC) ---- */
+/* ============================================================================
+   generateSampleIFC() — fabrique un vrai fichier IFC (format IFC2x3, texte)
+   d'une petite maison témoin : dalle de fondation, poteaux, murs RDC,
+   dalle d'étage, murs étage, toiture. Chaque élément porte un nom préfixé
+   par sa tâche (T1|..., T2|...) pour le mapping 4D automatique.
+   Aucune dépendance : peut tourner dans Node (tests) comme dans le
+   navigateur (génération à la volée). Unités : mètres.
+   ============================================================================ */
+function generateSampleIFC() {
+  let nextId = 0;
+  const lines = [];
+  // E(type, ...args) -> nouvel identifiant #n ; les args sont déjà formatés
+  function E(type /*, ...args */) {
+    const args = Array.prototype.slice.call(arguments, 1);
+    nextId += 1;
+    lines.push('#' + nextId + '=' + type + '(' + args.join(',') + ');');
+    return nextId;
+  }
+  // fmt() : un nombre -> "10." (les parseurs IFC aiment le point décimal)
+  function fmt(n) {
+    const r = Math.round(n * 1000) / 1000;
+    const s = String(r);
+    return s.indexOf('.') === -1 && s.indexOf('e') === -1 ? s + '.' : s;
+  }
+  function S(s) { // chaîne entre quotes, sans quotes internes
+    return "'" + String(s).replace(/'/g, '') + "'";
+  }
+  function guid() { // 22 caractères dans l'alphabet officiel des GUID IFC
+    const c = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$';
+    let g = '';
+    for (let i = 0; i < 22; i++) g += c[Math.floor(Math.random() * 64)];
+    return S(g);
+  }
+  const $ = '$';
+
+  /* ---------- En-tête et acteurs ---------- */
+  const person = E('IFCPERSON', $, $, $, $, $, $, $, $);
+  const org = E('IFCORGANIZATION', $, S('Cadence 4D'), $, $, $);
+  const po = E('IFCPERSONANDORGANIZATION', '#' + person, '#' + org, $);
+  const app = E('IFCAPPLICATION', '#' + org, S('1.0'), S('Cadence 4D'), S('Cadence4D'));
+  const hist = E('IFCOWNERHISTORY', '#' + po, '#' + app, '.READWRITE.', '.ADDED.', $, $, $, '1758801600');
+
+  /* ---------- Unités : mètres ---------- */
+  const lu = E('IFCSIUNIT', $, '.LENGTHUNIT.', $, '.METRE.');
+  const au = E('IFCSIUNIT', $, '.AREAUNIT.', $, '.SQUARE_METRE.');
+  const vu = E('IFCSIUNIT', $, '.VOLUMEUNIT.', $, '.CUBIC_METRE.');
+  const pu = E('IFCSIUNIT', $, '.PLANEANGLEUNIT.', $, '.RADIAN.');
+  const units = E('IFCUNITASSIGNMENT', '(#' + lu + ',#' + au + ',#' + vu + ',#' + pu + ')');
+
+  /* ---------- Contexte géométrique 3D ---------- */
+  const dX = E('IFCDIRECTION', '(1.,0.,0.)');
+  const dZ = E('IFCDIRECTION', '(0.,0.,1.)');
+  const p000 = E('IFCCARTESIANPOINT', '(0.,0.,0.)');
+  const ax3 = E('IFCAXIS2PLACEMENT3D', '#' + p000, $, $);
+  const ctx = E('IFCGEOMETRICREPRESENTATIONCONTEXT', $, S('Model'), '3', '1.E-05', '#' + ax3, '#' + dX);
+
+  /* ---------- Projet > Site > Bâtiment > Étages ---------- */
+  const proj = E('IFCPROJECT', guid(), '#' + hist, S('Maison temoin 4D'), $, $, $, $, '(#' + ctx + ')', '#' + units);
+  const sitePl = E('IFCLOCALPLACEMENT', $, '#' + ax3);
+  const site = E('IFCSITE', guid(), '#' + hist, S('Site'), $, $, '#' + sitePl, $, $, '.ELEMENT.', $, $, $, $, $);
+  const bldPl = E('IFCLOCALPLACEMENT', '#' + sitePl, '#' + ax3);
+  const bld = E('IFCBUILDING', guid(), '#' + hist, S('Batiment'), $, $, '#' + bldPl, $, $, '.ELEMENT.', $, $);
+
+  // Étage RDC (altitude 0) et Étage (altitude 3 m)
+  const rdcPl = E('IFCLOCALPLACEMENT', '#' + bldPl, '#' + ax3);
+  const rdc = E('IFCBUILDINGSTOREY', guid(), '#' + hist, S('RDC'), $, $, '#' + rdcPl, $, $, '.ELEMENT.', fmt(0));
+  const etPt = E('IFCCARTESIANPOINT', '(0.,0.,' + fmt(3) + ')');
+  const etAx = E('IFCAXIS2PLACEMENT3D', '#' + etPt, $, $);
+  const etPl = E('IFCLOCALPLACEMENT', '#' + bldPl, '#' + etAx);
+  const etg = E('IFCBUILDINGSTOREY', guid(), '#' + hist, S('Etage'), $, $, '#' + etPl, $, $, '.ELEMENT.', fmt(3));
+
+  E('IFCRELAGGREGATES', guid(), '#' + hist, $, $, '#' + proj, '(#' + site + ')');
+  E('IFCRELAGGREGATES', guid(), '#' + hist, $, $, '#' + site, '(#' + bld + ')');
+  E('IFCRELAGGREGATES', guid(), '#' + hist, $, $, '#' + bld, '(#' + rdc + ',#' + etg + ')');
+
+  /* ---------- Boîte : un élément IFC = un parallélépipède ---------- */
+  // box(nom, etageId, placementEtage, cx, cy, zBase, sx, sy, sz, ifcType, predefined)
+  const perStorey = {};
+  perStorey[rdc] = []; perStorey[etg] = [];
+  function box(name, storey, stPl, cx, cy, z0, sx, sy, sz, ifcType, predef) {
+    const p2 = E('IFCCARTESIANPOINT', '(0.,0.)');
+    const a2 = E('IFCAXIS2PLACEMENT2D', '#' + p2, $);
+    const pr = E('IFCRECTANGLEPROFILEDEF', '.AREA.', S('Rectangle'), '#' + a2, fmt(sx), fmt(sy));
+    // Position standard : le placement du PRODUIT porte la position (cx,cy,z0),
+    // le solide reste centré à l'origine de son repère local (ax3 = origine).
+    const solid = E('IFCEXTRUDEDAREASOLID', '#' + pr, '#' + ax3, '#' + dZ, fmt(sz));
+    const rep = E('IFCSHAPEREPRESENTATION', '#' + ctx, S('Body'), S('SweptSolid'), '(#' + solid + ')');
+    const pds = E('IFCPRODUCTDEFINITIONSHAPE', $, $, '(#' + rep + ')');
+    const pp = E('IFCCARTESIANPOINT', '(' + fmt(cx) + ',' + fmt(cy) + ',' + fmt(z0) + ')');
+    const pa = E('IFCAXIS2PLACEMENT3D', '#' + pp, $, $);
+    const lp = E('IFCLOCALPLACEMENT', '#' + stPl, '#' + pa);
+    let el;
+    if (ifcType === 'IFCSLAB') {
+      el = E('IFCSLAB', guid(), '#' + hist, S(name), $, $, '#' + lp, '#' + pds, $, predef);
+    } else if (ifcType === 'IFCCOLUMN') {
+      el = E('IFCCOLUMN', guid(), '#' + hist, S(name), $, $, '#' + lp, '#' + pds, $, predef);
+    } else {
+      el = E('IFCWALL', guid(), '#' + hist, S(name), $, $, '#' + lp, '#' + pds, $);
+    }
+    perStorey[storey].push(el);
+    return el;
+  }
+
+  /* ---------- La maison : 15 éléments, 6 tâches ---------- */
+  // T1 : fondations
+  box('T1|Dalle de fondation', rdc, rdcPl, 0, 0, 0, 10, 8, 0.4, 'IFCSLAB', '.BASESLAB.');
+  // T2 : poteaux RDC (4)
+  [[4, 3], [-4, 3], [4, -3], [-4, -3]].forEach(function (p, i) {
+    box('T2|Poteau RDC ' + (i + 1), rdc, rdcPl, p[0], p[1], 0.4, 0.4, 0.4, 2.6, 'IFCCOLUMN', '.COLUMN.');
+  });
+  // T3 : murs RDC (4)
+  box('T3|Mur RDC Nord', rdc, rdcPl, 0, 3.9, 0.4, 10, 0.2, 2.6, 'IFCWALL');
+  box('T3|Mur RDC Sud', rdc, rdcPl, 0, -3.9, 0.4, 10, 0.2, 2.6, 'IFCWALL');
+  box('T3|Mur RDC Est', rdc, rdcPl, 4.9, 0, 0.4, 0.2, 7.6, 2.6, 'IFCWALL');
+  box('T3|Mur RDC Ouest', rdc, rdcPl, -4.9, 0, 0.4, 0.2, 7.6, 2.6, 'IFCWALL');
+  // T4 : dalle étage
+  box('T4|Dalle etage', etg, etPl, 0, 0, 0, 10, 8, 0.3, 'IFCSLAB', '.FLOOR.');
+  // T5 : murs étage (4)
+  box('T5|Mur Etage Nord', etg, etPl, 0, 3.9, 0.3, 10, 0.2, 2.6, 'IFCWALL');
+  box('T5|Mur Etage Sud', etg, etPl, 0, -3.9, 0.3, 10, 0.2, 2.6, 'IFCWALL');
+  box('T5|Mur Etage Est', etg, etPl, 4.9, 0, 0.3, 0.2, 7.6, 2.6, 'IFCWALL');
+  box('T5|Mur Etage Ouest', etg, etPl, -4.9, 0, 0.3, 0.2, 7.6, 2.6, 'IFCWALL');
+  // T6 : toiture
+  box('T6|Toiture', etg, etPl, 0, 0, 2.9, 10.4, 8.4, 0.25, 'IFCSLAB', '.ROOF.');
+
+  // rattacher chaque élément à son étage
+  Object.keys(perStorey).forEach(function (st) {
+    const ids = perStorey[st].map(function (i) { return '#' + i; }).join(',');
+    E('IFCRELCONTAINEDINSPATIALSTRUCTURE', guid(), '#' + hist, $, $, '(' + ids + ')', '#' + st);
+  });
+
+  const header = [
+    'ISO-10303-21;',
+    'HEADER;',
+    "FILE_DESCRIPTION(('ViewDefinition [CoordinationView]'),'2;1');",
+    "FILE_NAME('maison-temoin-4d.ifc','2026-09-25T12:00:00',('Cadence 4D'),(''),'Cadence 4D - maquette de demonstration','2026-09-25','');",
+    "FILE_SCHEMA(('IFC2X3'));",
+    'ENDSEC;',
+    'DATA;'
+  ].join('\n');
+  return header + '\n' + lines.join('\n') + '\nENDSEC;\nEND-ISO-10303-21;\n';
+}
+
+if (typeof module !== 'undefined' && module.exports) { module.exports = { generateSampleIFC: generateSampleIFC }; }
+
+</script>
+<script type="module">
+/* ============================================================================
+   Cadence 4D — logique applicative (script module)
+   ----------------------------------------------------------------------------
+   1. Charge web-ifc (global window.WebIFC, build IIFE) + three.js (importmap).
+   2. Lit un fichier IFC (exemple généré ou uploadé) et construit une mesh
+      Three.js PAR ÉLÉMENT (contrôle total pour le 4D).
+   3. Planning : tâches avec dates -> chaque tâche pilote ses éléments :
+      pas commencé = caché | en cours = orange transparent | terminé = plein.
+   4. Assignation : clic sur un élément 3D, ou par type IFC entier.
+   ============================================================================ */
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+/* ---------------- État ---------------- */
+let ifcApi = null, modelID = -1, modelName = '';
+let elements = [];   // {id, name, type, meshes:[], taskId}
+let tasks = [];      // {id, name, start, end, color}
+let selectedTask = null, assignMode = false;
+let curDay = 0, playing = false, playSpeed = 1, lastTick = 0;
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const DAY = 864e5;
+const dstr = d => d.toISOString().slice(0, 10);
+const dparse = s => new Date(s + 'T12:00:00');
+const TASK_COLORS = ['#7c3aed', '#0ea5e9', '#16a34a', '#f59e0b', '#ef4444', '#ec4899', '#8b5cf6', '#14b8a6'];
+const TYPE_COLORS = { IFCWALL: 0xd9c39a, IFCWALLSTANDARDCASE: 0xd9c39a, IFCSLAB: 0x9aa1a8, IFCCOLUMN: 0xc98f5f, IFCBEAM: 0xb07a4f, IFCFOOTING: 0x8f8578, IFCPILE: 0x8f8578, IFCROOF: 0x9a5f43, IFCSTAIR: 0xb9a98f, IFCSTAIRFLIGHT: 0xb9a98f, IFCDOOR: 0x7d9bbf, IFCWINDOW: 0x9fd4e8, IFCRAILING: 0x6b7280, IFCMEMBER: 0xa8a29e, IFCPLATE: 0xa8a29e, IFCBUILDINGELEMENTPROXY: 0xb6c2d2, IFCCURTAINWALL: 0x9fd4e8 };
+const QUERY_TYPES = Object.keys(TYPE_COLORS);
+
+/* ---------------- Scène 3D ---------------- */
+let renderer, scene, camera, controls, modelGroup;
+const MAT = {}, MAT_DOING = null, MAT_FREE = null;
+function initScene() {
+  const box = $('#view3d');
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  box.appendChild(renderer.domElement);
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0xf4f6fa);
+  camera = new THREE.PerspectiveCamera(50, 1, 0.1, 2000);
+  camera.position.set(16, 12, 16);
+  controls = new OrbitControls(camera, renderer.domElement);
+  controls.target.set(0, 1.5, 0);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8f98, 1.1));
+  const sun = new THREE.DirectionalLight(0xffffff, 1.6);
+  sun.position.set(20, 30, 10); scene.add(sun);
+  const grid = new THREE.GridHelper(40, 40, 0xc7cdd6, 0xe2e7ef);
+  scene.add(grid);
+  modelGroup = new THREE.Group(); scene.add(modelGroup);
+  const resize = () => {
+    const w = box.clientWidth, h = box.clientHeight;
+    renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix();
+  };
+  new ResizeObserver(resize).observe(box); resize();
+  renderer.domElement.addEventListener('pointerdown', onPick);
+  requestAnimationFrame(loop);
+}
+function loop(t) {
+  requestAnimationFrame(loop);
+  if (playing) {
+    if (t - lastTick > 600) { lastTick = t; stepDay(playSpeed); }
+  }
+  controls.update(); renderer.render(scene, camera);
+}
+
+/* ---------------- Chargement IFC ---------------- */
+async function initIfc() {
+  setStatus('Chargement du moteur IFC…');
+  ifcApi = new WebIFC.IfcAPI();
+  ifcApi.SetWasmPath('https://cdn.jsdelivr.net/npm/web-ifc@0.0.74/', true);
+  await ifcApi.Init();
+}
+function clearModel() {
+  if (modelID >= 0) { try { ifcApi.CloseModel(modelID); } catch (e) {} modelID = -1; }
+  modelGroup.clear(); elements = [];
+  tasks.forEach(t => t.elts = []);
+}
+async function loadIFC(buffer, name, autoMap) {
+  setStatus('Lecture du fichier IFC…');
+  clearModel();
+  await new Promise(r => setTimeout(r, 30));
+  try {
+    modelID = ifcApi.OpenModel(new Uint8Array(buffer));
+  } catch (e) { setStatus('❌ Impossible de lire ce fichier IFC.'); return; }
+  modelName = name;
+  ifcApi.LoadAllGeometry(modelID);
+  const matCache = {};
+  const matFor = (type) => {
+    if (!matCache[type]) matCache[type] = new THREE.MeshLambertMaterial({ color: TYPE_COLORS[type] ?? 0xa8bdd4 });
+    return matCache[type];
+  };
+  const matDoing = new THREE.MeshLambertMaterial({ color: 0xf59e0b, transparent: true, opacity: 0.55 });
+  const matFree = new THREE.MeshLambertMaterial({ color: 0xd7dde5 });
+  MAT.doing = matDoing; MAT.free = matFree;
+  let count = 0;
+  for (const t of QUERY_TYPES) {
+    if (!WebIFC[t]) continue;
+    const v = ifcApi.GetLineIDsWithType(modelID, WebIFC[t]);
+    for (let i = 0; i < v.size(); i++) {
+      const id = v.get(i);
+      if (++count > 4000) { setStatus('⚠️ Maquette trop grosse pour la démo (4000 éléments max).'); break; }
+      let nm = ''; try { const ln = ifcApi.GetLine(modelID, id); nm = (ln.Name && ln.Name.value) || ''; } catch (e) {}
+      const el = { id, name: nm || (t + ' ' + id), type: t, meshes: [], taskId: null };
+      const flat = ifcApi.GetFlatMesh(modelID, id);
+      for (let g = 0; g < flat.geometries.size(); g++) {
+        const pg = flat.geometries.get(g);
+        // Lire la transformation IMMÉDIATEMENT : la mémoire WASM peut être réutilisée par les appels suivants
+        const ft = Array.from(pg.flatTransformation || []);
+        const ftOK = ft.length === 16 && ft.every(Number.isFinite);
+        const geom = ifcApi.GetGeometry(modelID, pg.geometryExpressID);
+        const verts = ifcApi.GetVertexArray(geom.GetVertexData(), geom.GetVertexDataSize());
+        const idx = ifcApi.GetIndexArray(geom.GetIndexData(), geom.GetIndexDataSize());
+        geom.delete();
+        if (!verts.length || !idx.length) continue;
+        const geo = new THREE.BufferGeometry();
+        const pos = new Float32Array(verts.length / 6 * 3), nor = new Float32Array(verts.length / 6 * 3);
+        for (let k = 0; k < verts.length / 6; k++) {
+          pos[k * 3] = verts[k * 6]; pos[k * 3 + 1] = verts[k * 6 + 1]; pos[k * 3 + 2] = verts[k * 6 + 2];
+          nor[k * 3] = verts[k * 6 + 3]; nor[k * 3 + 1] = verts[k * 6 + 4]; nor[k * 3 + 2] = verts[k * 6 + 5];
+        }
+        geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+        geo.setIndex(new THREE.BufferAttribute(idx, 1));
+        geo.computeBoundingBox();
+        const rawbb = geo.boundingBox.clone();
+        geo.applyMatrix4(new THREE.Matrix4().fromArray(ftOK ? ft : [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]));
+        const mesh = new THREE.Mesh(geo, matFor(t));
+        mesh.userData = { expressID: id, baseMat: matFor(t), ft: ftOK ? ft : null, ftOK, rawbb }; 
+        el.meshes.push(mesh); modelGroup.add(mesh);
+      }
+      if (el.meshes.length) elements.push(el);
+    }
+  }
+  // cadrer la caméra
+  const bb = new THREE.Box3().setFromObject(modelGroup);
+  if (!bb.isEmpty()) {
+    const c = bb.getCenter(new THREE.Vector3()), s = bb.getSize(new THREE.Vector3()).length();
+    controls.target.copy(c);
+    camera.position.set(c.x + s * 0.9, c.y + s * 0.7, c.z + s * 0.9);
+    camera.near = s / 1000; camera.far = s * 20; camera.updateProjectionMatrix();
+  }
+  if (autoMap) autoMapSample();
+  buildTypePanel();
+  if (!tasks.length) addTask('Gros œuvre', 0, 10, true);
+  fitTimeline(); renderTasks(); update4D();
+  setStatus('✅ ' + elements.length + ' éléments chargés — ' + esc(name));
+}
+
+/* Mapping auto de l'exemple : le nom commence par T1|, T2|… */
+function autoMapSample() {
+  tasks = sampleTasks();
+  tasks.forEach(t => t.elts = []);
+  elements.forEach(el => {
+    const m = el.name.match(/^T(\d+)\|/);
+    if (m) { const tk = tasks[+m[1] - 1]; if (tk) { el.taskId = tk.id; tk.elts.push(el.id); } }
+  });
+  selectedTask = tasks[0] ? tasks[0].id : null;
+}
+
+/* ---------------- Planning ---------------- */
+function sampleTasks() {
+  let ci = 0;
+  const T = (n, s, e) => ({ id: 't' + Math.random().toString(36).slice(2, 7), name: n, start: s, end: e, color: TASK_COLORS[(ci++) % TASK_COLORS.length], elts: [] });
+  tasks = [];
+  return [
+    T('Fondations', '2026-10-01', '2026-10-05'),
+    T('Poteaux RDC', '2026-10-06', '2026-10-09'),
+    T('Murs RDC', '2026-10-10', '2026-10-16'),
+    T('Dalle étage', '2026-10-17', '2026-10-20'),
+    T('Murs étage', '2026-10-21', '2026-10-27'),
+    T('Toiture', '2026-10-28', '2026-10-30'),
+  ];
+}
+function addTask(name, d0, d1, silent) {
+  const r = rangeDays();
+  const t = {
+    id: 't' + Math.random().toString(36).slice(2, 7),
+    name: name || 'Nouvelle tâche',
+    start: dstr(new Date(r.t0 + (d0 ?? 0) * DAY)),
+    end: dstr(new Date(r.t0 + (d1 ?? 7) * DAY)),
+    color: TASK_COLORS[tasks.length % TASK_COLORS.length], elts: []
+  };
+  tasks.push(t); selectedTask = t.id;
+  if (!silent) { fitTimeline(); renderTasks(); update4D(); }
+  return t;
+}
+function rangeDays() {
+  if (!tasks.length) { const t0 = Date.now(); return { t0, t1: t0 + 30 * DAY }; }
+  let t0 = Infinity, t1 = -Infinity;
+  tasks.forEach(t => { t0 = Math.min(t0, dparse(t.start).getTime()); t1 = Math.max(t1, dparse(t.end).getTime()); });
+  t0 -= 2 * DAY; t1 += 2 * DAY;
+  return { t0, t1 };
+}
+function fitTimeline() {
+  const r = rangeDays();
+  const sl = $('#tl');
+  sl.min = 0; sl.max = Math.round((r.t1 - r.t0) / DAY); sl.value = 0;
+  curDay = 0; $('#tllabels').innerHTML = '<span>' + dstr(new Date(r.t0)) + '</span><span>' + dstr(new Date(r.t1)) + '</span>';
+  updateDateLabel();
+}
+function curDate() { const r = rangeDays(); return new Date(r.t0 + curDay * DAY); }
+function updateDateLabel() {
+  $('#tldate').textContent = '📅 ' + curDate().toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+}
+function stepDay(n) {
+  const sl = $('#tl'), max = +sl.max;
+  curDay = Math.min(max, curDay + n);
+  sl.value = curDay;
+  if (curDay >= max) setPlay(false);
+  updateDateLabel(); update4D(); renderTasks();
+}
+
+/* ---------------- Moteur 4D ---------------- */
+function taskState(t, date) {
+  const s = dparse(t.start).getTime(), e = dparse(t.end).getTime() + DAY - 1, d = date.getTime();
+  if (d < s) return 'todo';
+  if (d <= e) return 'doing';
+  return 'done';
+}
+function update4D() {
+  const date = curDate();
+  const byId = {}; tasks.forEach(t => byId[t.id] = t);
+  elements.forEach(el => {
+    const t = byId[el.taskId];
+    if (!t) { el.meshes.forEach(m => { m.visible = true; m.material = MAT.free; }); return; }
+    const st = taskState(t, date);
+    el.meshes.forEach(m => {
+      if (st === 'todo') { m.visible = false; }
+      else if (st === 'doing') { m.visible = true; m.material = MAT.doing; }
+      else { m.visible = true; m.material = m.userData.baseMat; }
+    });
+  });
+  // % global
+  let sum = 0;
+  tasks.forEach(t => {
+    const s = dparse(t.start).getTime(), e = dparse(t.end).getTime(), d = date.getTime();
+    sum += d <= s ? 0 : d >= e + DAY - 1 ? 1 : (d - s) / (e + DAY - 1 - s);
+  });
+  const pct = tasks.length ? Math.round(sum / tasks.length * 100) : 0;
+  $('#prog').style.width = pct + '%'; $('#progtxt').textContent = pct + ' %';
+}
+
+/* ---------------- Clic : assigner un élément à la tâche ---------------- */
+const ray = new THREE.Raycaster(), ptr = new THREE.Vector2();
+function onPick(ev) {
+  if (!assignMode || !selectedTask) return;
+  const r = renderer.domElement.getBoundingClientRect();
+  ptr.x = ((ev.clientX - r.left) / r.width) * 2 - 1;
+  ptr.y = -((ev.clientY - r.top) / r.height) * 2 + 1;
+  ray.setFromCamera(ptr, camera);
+  const hits = ray.intersectObjects(modelGroup.children); // tous, même si masqués par le curseur temps
+  if (!hits.length) return;
+  const id = hits[0].object.userData.expressID;
+  const el = elements.find(e => e.id === id);
+  if (!el) return;
+  tasks.forEach(t => t.elts = t.elts.filter(x => x !== id));
+  const t = tasks.find(x => x.id === selectedTask);
+  el.taskId = t.id; t.elts.push(id);
+  setStatus('🧱 « ' + esc(el.name) + ' » → tâche « ' + esc(t.name) + ' »');
+  renderTasks(); update4D();
+}
+
+/* ---------------- Interface : tâches ---------------- */
+function renderTasks() {
+  const date = curDate(), box = $('#tasks');
+  let h = '';
+  tasks.forEach(t => {
+    const st = taskState(t, date);
+    const badge = st === 'done' ? '✅' : st === 'doing' ? '🟠 en cours' : '⚪ à venir';
+    const s = dparse(t.start).getTime(), e = dparse(t.end).getTime(), d = date.getTime();
+    const p = d <= s ? 0 : d >= e + DAY - 1 ? 100 : Math.round((d - s) / (e + DAY - 1 - s) * 100);
+    h += '<div class="task' + (t.id === selectedTask ? ' sel' : '') + '" data-id="' + t.id + '">'
+      + '<div class="thead" onclick="selTask(\'' + t.id + '\')"><span class="dot" style="background:' + t.color + '"></span>'
+      + '<b>' + esc(t.name) + '</b><span class="cnt">' + t.elts.length + ' él.</span><span class="st">' + badge + '</span></div>'
+      + '<div class="tprog"><i style="width:' + p + '%;background:' + t.color + '"></i></div>'
+      + '<div class="tedit">'
+      + '<input type="text" value="' + esc(t.name) + '" onchange="renTask(\'' + t.id + '\',this.value)" title="Nom">'
+      + '<input type="date" value="' + t.start + '" onchange="dateTask(\'' + t.id + '\',\'start\',this.value)">'
+      + '<input type="date" value="' + t.end + '" onchange="dateTask(\'' + t.id + '\',\'end\',this.value)">'
+      + '<button class="mini" onclick="typeAssign(\'' + t.id + '\')" title="Assigner tout un type IFC">🧱⇥</button>'
+      + '<button class="mini danger" onclick="delTask(\'' + t.id + '\')" title="Supprimer">🗑</button>'
+      + '</div></div>';
+  });
+  box.innerHTML = h || '<div class="mut">Aucune tâche. Clique « ＋ Tâche ».</div>';
+  const assigned = elements.filter(e => e.taskId).length;
+  $('#mapstat').textContent = assigned + ' / ' + elements.length + ' éléments liés à des tâches';
+}
+window.selTask = id => { selectedTask = id; renderTasks(); };
+window.renTask = (id, v) => { const t = tasks.find(x => x.id === id); if (t && v.trim()) { t.name = v.trim(); renderTasks(); } };
+window.dateTask = (id, k, v) => {
+  const t = tasks.find(x => x.id === id); if (!t || !v) return;
+  t[k] = v;
+  if (dparse(t.end) < dparse(t.start)) { if (k === 'start') t.end = v; else t.start = v; }
+  fitTimeline(); renderTasks(); update4D();
+};
+window.delTask = id => {
+  if (!confirm('Supprimer cette tâche ? (les éléments seront libérés)')) return;
+  tasks = tasks.filter(t => t.id !== id);
+  elements.forEach(e => { if (e.taskId === id) e.taskId = null; });
+  if (selectedTask === id) selectedTask = tasks[0] ? tasks[0].id : null;
+  fitTimeline(); renderTasks(); update4D();
+};
+/* Assigner tout un type IFC à la tâche (ex : tous les IfcWall) */
+window.typeAssign = id => {
+  const t = tasks.find(x => x.id === id); if (!t) return;
+  const types = [...new Set(elements.map(e => e.type))].sort();
+  const ch = prompt('Assigner quel type à « ' + t.name + ' » ?\n' + types.map((x, i) => (i + 1) + '. ' + x).join('\n'));
+  const ty = types[parseInt(ch, 10) - 1];
+  if (!ty) return;
+  let n = 0;
+  elements.forEach(e => {
+    if (e.type === ty) {
+      tasks.forEach(x => x.elts = x.elts.filter(y => y !== e.id));
+      e.taskId = t.id; t.elts.push(e.id); n++;
+    }
+  });
+  setStatus('🧱 ' + n + ' éléments (' + ty + ') → « ' + esc(t.name) + ' »');
+  renderTasks(); update4D();
+};
+
+/* ---------------- Panneau des types IFC présents ---------------- */
+function buildTypePanel() {
+  const m = {};
+  elements.forEach(e => { m[e.type] = (m[e.type] || 0) + 1; });
+  $('#types').innerHTML = Object.keys(m).sort().map(t =>
+    '<span class="tag">' + t.replace('IFC', '') + ' × ' + m[t] + '</span>').join('') || '<span class="mut">—</span>';
+}
+
+/* ---------------- Divers UI ---------------- */
+function setStatus(t) { $('#status').innerHTML = t; }
+window.setPlay = v => {
+  playing = v === undefined ? !playing : v;
+  $('#playbtn').textContent = playing ? '⏸ Pause' : '▶ Lecture';
+  lastTick = 0;
+  if (playing && +$('#tl').value >= +$('#tl').max) { $('#tl').value = 0; curDay = 0; updateDateLabel(); update4D(); renderTasks(); }
+};
+window.resetView = () => {
+  const bb = new THREE.Box3().setFromObject(modelGroup);
+  if (bb.isEmpty()) return;
+  const c = bb.getCenter(new THREE.Vector3()), s = bb.getSize(new THREE.Vector3()).length();
+  controls.target.copy(c);
+  camera.position.set(c.x + s * 0.9, c.y + s * 0.7, c.z + s * 0.9);
+};
+window.toggleAssign = () => {
+  assignMode = !assignMode;
+  $('#assignbtn').classList.toggle('on', assignMode);
+  $('#assignbtn').textContent = assignMode ? '👆 Clic : assigner (ACTIF)' : '👆 Clic : assigner un élément';
+  renderer.domElement.style.cursor = assignMode ? 'crosshair' : '';
+  if (assignMode && !selectedTask) setStatus('Sélectionne d’abord une tâche (clique dessus), puis clique des éléments en 3D.');
+  else if (assignMode) setStatus('👆 Clique des éléments en 3D : ils rejoignent « ' + esc(tasks.find(t => t.id === selectedTask).name) + ' ».');
+};
+window.togglePanel = () => document.body.classList.toggle('hidepanel');
+
+/* ---------------- Démarrage ---------------- */
+function bindUI() {
+  $('#tl').addEventListener('input', e => { setPlay(false); curDay = +e.target.value; updateDateLabel(); update4D(); renderTasks(); });
+  $('#playbtn').onclick = () => setPlay();
+  $('#addtask').onclick = () => addTask();
+  $('#speed').onchange = e => playSpeed = +e.target.value;
+  $('#file').addEventListener('change', async e => {
+    const f = e.target.files[0]; if (!f) return;
+    if (!ifcApi) { setStatus('⏳ Le moteur 3D charge encore, attends quelques secondes puis réessaie.'); e.target.value = ''; return; }
+    setStatus('Lecture de ' + esc(f.name) + '…');
+    const buf = await f.arrayBuffer();
+    tasks = []; selectedTask = null;
+    await loadIFC(buf, f.name, false);
+    setStatus('✅ ' + esc(f.name) + ' chargé. Assigne les éléments aux tâches : clique 👆 ou utilise 🧱⇥ par type.');
+    e.target.value = '';
+  });
+  $('#sample').onclick = async () => {
+    if (!ifcApi) { setStatus('⏳ Le moteur 3D charge encore, attends quelques secondes puis réessaie.'); return; }
+    const ifcText2 = generateSampleIFC();
+    await loadIFC(new TextEncoder().encode(ifcText2).buffer, 'maison-temoin.ifc (exemple)', true);
+  };
+}
+window.addEventListener('DOMContentLoaded', async () => {
+  initScene();
+  bindUI(); // les boutons répondent tout de suite, même si Internet est lent
+  setStatus('⏳ Chargement du moteur 3D… (Internet requis, quelques secondes)');
+  try { await initIfc(); }
+  catch (e) {
+    setStatus('❌ Les librairies en ligne n\'ont pas chargé. Vérifie ta connexion Internet puis <button class="btn pri" onclick="location.reload()">🔄 Recharger la page</button>');
+    return;
+  }
+  // exemple intégré : généré à la volée, mappé automatiquement
+  const ifcText = generateSampleIFC();
+  await loadIFC(new TextEncoder().encode(ifcText).buffer, 'maison-temoin.ifc (exemple)', true);
+});
+
+// Diagnostic (lecture seule, console) : window.__cad4d.info()
+window.__cad4d = {
+  info() {
+    const r = x => Math.round(x * 100) / 100;
+    return elements.map(e => ({
+      name: e.name, task: e.taskId ? (tasks.find(t => t.id === e.taskId) || {}).name || null : null,
+      meshes: e.meshes.map(m => {
+        m.geometry.computeBoundingBox();
+        const b = m.geometry.boundingBox, rb = m.userData.rawbb;
+        return {
+          visible: m.visible, v: m.geometry.attributes.position.count, ftOK: m.userData.ftOK,
+          raw: [[r(rb.min.x), r(rb.min.y), r(rb.min.z)], [r(rb.max.x), r(rb.max.y), r(rb.max.z)]],
+          bb: [[r(b.min.x), r(b.min.y), r(b.min.z)], [r(b.max.x), r(b.max.y), r(b.max.z)]]
+        };
+      })
+    }));
+  }
+};
+
+</script>
+</body>
+</html>
